@@ -259,9 +259,19 @@ class Room {
       );
       return;
     } else {
+      const current_question = this.questions[question_number - 1];
+      if (!current_question) {
+        user?.ws?.send(
+          JSON.stringify({
+            type: "response",
+            success: false,
+            message: "Invalid question number!",
+          })
+        );
+        return;
+      }
       this.responses.set(id, { answer, time_left });
       let score: number;
-      const current_question = this.questions[question_number - 1];
       if (
         question_number !== this.current_question_index + 1 ||
         current_question.answer !== answer
@@ -323,6 +333,7 @@ class Room {
   }
 
   resetRoom() {
+    if (this.interval_id) clearInterval(this.interval_id);
     this.questions = [];
     this.responses = new Map();
     this.interval_id = undefined;
@@ -331,7 +342,6 @@ class Room {
     this.allowedUsernames = new Map();
     this.time_left = QUESTION_DURATION;
     this.users.forEach((user) => (user.score = 0));
-    if (this.interval_id) clearInterval(this.interval_id);
     this.broadcastEventToEveryone(
       JSON.stringify({
         type: "reset-quiz",

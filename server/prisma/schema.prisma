@@ -14,8 +14,17 @@ datasource db {
 }
 
 model User {
-  id           String  @id @default(cuid())
-  username     String  @unique 
-  password     String
-  refreshToken String?
+  id       String    @id @default(cuid())
+  username String    @unique
+  password String
+  sessions Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  refreshToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
