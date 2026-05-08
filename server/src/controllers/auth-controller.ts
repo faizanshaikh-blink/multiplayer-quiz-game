@@ -74,9 +74,11 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = createTokens(newUser.id, username);
 
-    await db.user.update({
-      where: { id: newUser.id },
-      data: { refreshToken },
+    await db.session.create({
+      data: {
+        userId: newUser.id,
+        refreshToken,
+      },
     });
 
     setCookie(res, "access_token", accessToken, accessTokenCookieExpiry);
@@ -118,9 +120,11 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
 
     const { accessToken, refreshToken } = createTokens(user.id, username);
 
-    await db.user.update({
-      where: { id: user.id },
-      data: { refreshToken },
+    await db.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+      },
     });
 
     setCookie(res, "access_token", accessToken, accessTokenCookieExpiry);
@@ -156,26 +160,30 @@ export const refreshToken = asyncHandler(
         return res.status(400).json({ message: "Login required!" });
       }
 
-      const user = await db.user.findUnique({
-        where: { id: decodedToken.userId },
+      const session = await db.session.findUnique({
+        where: { refreshToken: refresh_token },
         select: {
           id: true,
-          username: true,
-          refreshToken: true,
+          userId: true,
+          user: {
+            select: {
+              username: true,
+            },
+          },
         },
       });
 
-      if (!user || user.refreshToken !== refresh_token) {
+      if (!session) {
         return res.status(400).json({ message: "Login required!" });
       }
 
       const { accessToken, refreshToken: newRefreshToken } = createTokens(
-        user.id,
-        user.username
+        session.userId,
+        session.user.username
       );
 
-      await db.user.update({
-        where: { id: user.id },
+      await db.session.update({
+        where: { id: session.id },
         data: { refreshToken: newRefreshToken },
       });
 
@@ -183,7 +191,7 @@ export const refreshToken = asyncHandler(
       setCookie(res, "refresh_token", newRefreshToken, refreshTokenCookieExpiry);
 
       return res.status(200).json({
-        data: { username: user.username },
+        data: { username: session.user.username },
         message: "Token refresh successful",
       });
     } catch (error) {
@@ -203,18 +211,17 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 
     const userDetails = req.user as User;
 
-    const user = await db.user.findUnique({
-      where: { id: userDetails?.id },
+    const session = await db.session.findUnique({
+      where: { refreshToken: refresh_token },
       select: { id: true },
     });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found!" });
+    if (!session) {
+      return res.status(404).json({ message: "Session not found!" });
     }
 
-    await db.user.update({
-      where: { id: user.id },
-      data: { refreshToken: null },
+    await db.session.delete({
+      where: { id: session.id },
     });
 
     setCookie(res, "access_token", "", 0);
