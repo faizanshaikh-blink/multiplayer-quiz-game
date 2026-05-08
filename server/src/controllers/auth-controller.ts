@@ -50,7 +50,10 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
     }
     let { username, password } = data;
 
-    const userExists = await db.user.findUnique({ where: { username } });
+    const userExists = await db.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
 
     if (userExists) {
       return res.status(400).json({ message: "Username already taken!" });
@@ -62,6 +65,10 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
       data: {
         username: username,
         password: hashedPassword,
+      },
+      select: {
+        id: true,
+        username: true,
       },
     });
 
@@ -77,7 +84,7 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 
     return res
       .status(201)
-      .json({ data: { username }, message: "Sign Up successful" });
+      .json({ data: { username: newUser.username }, message: "Sign Up successful" });
   } catch (error) {
     console.error("Error in signUp ", error);
     return res
@@ -94,7 +101,10 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
     }
     let { username, password } = data;
 
-    const user = await db.user.findUnique({ where: { username } });
+    const user = await db.user.findUnique({
+      where: { username },
+      select: { id: true, username: true, password: true },
+    });
 
     if (!user) {
       return res.status(404).json({ message: "User not found!" });
@@ -118,7 +128,7 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
 
     return res
       .status(200)
-      .json({ data: { username }, message: "Sign In successful" });
+      .json({ data: { username: user.username }, message: "Sign In successful" });
   } catch (error) {
     console.error("Error in signIn ", error);
     return res
@@ -148,24 +158,29 @@ export const refreshToken = asyncHandler(
 
       const user = await db.user.findUnique({
         where: { id: decodedToken.userId },
+        select: {
+          id: true,
+          username: true,
+          refreshToken: true,
+        },
       });
 
-      if (!user) {
+      if (!user || user.refreshToken !== refresh_token) {
         return res.status(400).json({ message: "Login required!" });
       }
 
-      const { accessToken, refreshToken } = createTokens(
+      const { accessToken, refreshToken: newRefreshToken } = createTokens(
         user.id,
         user.username
       );
 
       await db.user.update({
         where: { id: user.id },
-        data: { refreshToken },
+        data: { refreshToken: newRefreshToken },
       });
 
       setCookie(res, "access_token", accessToken, accessTokenCookieExpiry);
-      setCookie(res, "refresh_token", refreshToken, refreshTokenCookieExpiry);
+      setCookie(res, "refresh_token", newRefreshToken, refreshTokenCookieExpiry);
 
       return res.status(200).json({
         data: { username: user.username },
@@ -190,6 +205,7 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 
     const user = await db.user.findUnique({
       where: { id: userDetails?.id },
+      select: { id: true },
     });
 
     if (!user) {

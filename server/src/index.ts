@@ -62,6 +62,7 @@ server.on("upgrade", async (req: AuthIncomingMessage, socket, head) => {
     ) as JwtPayload;
     const user = await db.user.findUnique({
       where: { id: decodedToken.userId },
+      select: { id: true, username: true },
     });
     if (!user) return socket.destroy();
     req.user = { id: user.id, username: user.username };
@@ -85,7 +86,14 @@ wss.on("connection", (ws, req: AuthIncomingMessage) => {
 });
 
 const handleMessage = (user: User, ws: WebSocket, message: string) => {
-  const { type, ...data } = JSON.parse(message.toString()) as ClientMessage;
+  let parsedMessage: ClientMessage;
+  try {
+    parsedMessage = JSON.parse(message.toString()) as ClientMessage;
+  } catch (error) {
+    console.error("Failed to parse WebSocket message:", error);
+    return;
+  }
+  const { type, ...data } = parsedMessage;
   switch (type) {
     case "join-room": {
       handleJoinRoom(user, ws, data.room_id);
